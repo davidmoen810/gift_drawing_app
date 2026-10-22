@@ -31,7 +31,10 @@ export interface GiftExchange {
   name: string;
   families: Family[];
   membersConfirmed: boolean;
-  avoidSameFamily: boolean;
+  avoidParentChild: boolean;
+  avoidChildParent: boolean;
+  avoidSiblings: boolean;
+  avoidSpouses: boolean;
   rulesConfigured: boolean;
   rulesSkipped: boolean;
   drawing: DrawingPair[] | null;
@@ -42,12 +45,18 @@ export function exchangeParticipants(exchange: GiftExchange): Array<{
   id: string;
   name: string;
   familyId: string;
+  childrenIds: string[];
+  siblingIds: string[];
+  spouseId: string | null;
 }> {
   return exchange.families.flatMap((family) =>
     family.members.map((member) => ({
       id: member.id,
       name: member.firstName,
       familyId: family.id,
+      childrenIds: member.relationships.childrenIds,
+      siblingIds: member.relationships.siblingIds,
+      spouseId: member.relationships.spouseId,
     })),
   );
 }
@@ -66,16 +75,38 @@ export function canStartDrawing(exchange: GiftExchange): boolean {
   }
 
   const participants = exchangeParticipants(exchange);
-  if (!exchange.avoidSameFamily) {
-    return true;
+  const matchedGivers = new Map<string, string>();
+
+  function canMatch(giverId: string, visitedRecipients: Set<string>): boolean {
+    const giverParticipant = participants.find((participant) => participant.id === giverId);
+    if (!giverParticipant) {
+      return false;
+    }
+    for (const recipient of participants) {
+      if (
+        recipient.id === giverId ||
+        visitedRecipients.has(recipient.id) ||
+        (exchange.avoidParentChild && giverParticipant.childrenIds.includes(recipient.id)) ||
+        (exchange.avoidChildParent && recipient.childrenIds.includes(giverId)) ||
+        (exchange.avoidSiblings &&
+          (giverParticipant.siblingIds.includes(recipient.id) ||
+            recipient.siblingIds.includes(giverId))) ||
+        (exchange.avoidSpouses &&
+          (giverParticipant.spouseId === recipient.id || recipient.spouseId === giverId))
+      ) {
+        continue;
+      }
+      visitedRecipients.add(recipient.id);
+      const previousGiver = matchedGivers.get(recipient.id);
+      if (!previousGiver || canMatch(previousGiver, visitedRecipients)) {
+        matchedGivers.set(recipient.id, giverId);
+        return true;
+      }
+    }
+    return false;
   }
 
-  const familyCounts = new Map<string, number>();
-  for (const participant of participants) {
-    familyCounts.set(participant.familyId, (familyCounts.get(participant.familyId) ?? 0) + 1);
-  }
-
-  return Math.max(...familyCounts.values()) <= Math.floor(participants.length / 2);
+  return participants.every((participant) => canMatch(participant.id, new Set()));
 }
 
 export function generateDrawing(exchange: GiftExchange): DrawingPair[] | null {
@@ -102,8 +133,16 @@ export function generateDrawing(exchange: GiftExchange): DrawingPair[] | null {
         (index) =>
           index !== giverIndex &&
           !recipients.has(index) &&
-          (!exchange.avoidSameFamily ||
-            participants[index].familyId !== participants[giverIndex].familyId),
+          (!exchange.avoidParentChild ||
+            !participants[giverIndex].childrenIds.includes(participants[index].id)) &&
+          (!exchange.avoidChildParent ||
+            !participants[index].childrenIds.includes(participants[giverIndex].id)) &&
+          (!exchange.avoidSiblings ||
+            (!participants[giverIndex].siblingIds.includes(participants[index].id) &&
+              !participants[index].siblingIds.includes(participants[giverIndex].id))) &&
+          (!exchange.avoidSpouses ||
+            (participants[giverIndex].spouseId !== participants[index].id &&
+              participants[index].spouseId !== participants[giverIndex].id)),
       );
 
     for (let index = candidates.length - 1; index > 0; index--) {

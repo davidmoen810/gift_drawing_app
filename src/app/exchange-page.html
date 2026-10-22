@@ -220,37 +220,6 @@
                         <span class="zone-empty">Drop a name here</span>
                       }
                     </div>
-                    <div class="relationship-add">
-                      <label>
-                        <span class="visually-hidden">Choose a child</span>
-                        <select
-                          name="childrenCandidate"
-                          [ngModel]="relationshipCandidates().children"
-                          [disabled]="relationshipSaving()"
-                          (ngModelChange)="setRelationshipCandidate('children', $event)"
-                        >
-                          <option value="">Choose a person</option>
-                          @for (
-                            family of availableRelationshipFamilies('children');
-                            track family.id
-                          ) {
-                            <optgroup [label]="family.name">
-                              @for (person of family.members; track person.id) {
-                                <option [value]="person.id">{{ person.firstName }}</option>
-                              }
-                            </optgroup>
-                          }
-                        </select>
-                      </label>
-                      <button
-                        class="secondary-button"
-                        type="button"
-                        [disabled]="relationshipSaving() || !canAddRelationship('children')"
-                        (click)="addRelationship('children')"
-                      >
-                        Add child
-                      </button>
-                    </div>
                   </section>
 
                   <section
@@ -283,37 +252,6 @@
                       } @empty {
                         <span class="zone-empty">Drop a name here</span>
                       }
-                    </div>
-                    <div class="relationship-add">
-                      <label>
-                        <span class="visually-hidden">Choose a sibling</span>
-                        <select
-                          name="siblingsCandidate"
-                          [ngModel]="relationshipCandidates().siblings"
-                          [disabled]="relationshipSaving()"
-                          (ngModelChange)="setRelationshipCandidate('siblings', $event)"
-                        >
-                          <option value="">Choose a person</option>
-                          @for (
-                            family of availableRelationshipFamilies('siblings');
-                            track family.id
-                          ) {
-                            <optgroup [label]="family.name">
-                              @for (person of family.members; track person.id) {
-                                <option [value]="person.id">{{ person.firstName }}</option>
-                              }
-                            </optgroup>
-                          }
-                        </select>
-                      </label>
-                      <button
-                        class="secondary-button"
-                        type="button"
-                        [disabled]="relationshipSaving() || !canAddRelationship('siblings')"
-                        (click)="addRelationship('siblings')"
-                      >
-                        Add sibling
-                      </button>
                     </div>
                   </section>
 
@@ -348,37 +286,6 @@
                         <span class="zone-empty">Drop a name here</span>
                       }
                     </div>
-                    <div class="relationship-add">
-                      <label>
-                        <span class="visually-hidden">Choose a spouse</span>
-                        <select
-                          name="spouseCandidate"
-                          [ngModel]="relationshipCandidates().spouse"
-                          [disabled]="relationshipSaving()"
-                          (ngModelChange)="setRelationshipCandidate('spouse', $event)"
-                        >
-                          <option value="">Choose a person</option>
-                          @for (
-                            family of availableRelationshipFamilies('spouse');
-                            track family.id
-                          ) {
-                            <optgroup [label]="family.name">
-                              @for (person of family.members; track person.id) {
-                                <option [value]="person.id">{{ person.firstName }}</option>
-                              }
-                            </optgroup>
-                          }
-                        </select>
-                      </label>
-                      <button
-                        class="secondary-button"
-                        type="button"
-                        [disabled]="relationshipSaving() || !canAddRelationship('spouse')"
-                        (click)="addRelationship('spouse')"
-                      >
-                        Set spouse
-                      </button>
-                    </div>
                   </section>
                 </section>
               }
@@ -401,25 +308,73 @@
           </p>
 
           <div class="rule-option">
-            <label for="avoid-same-family">
+            <label for="avoid-parent-child">
               <input
-                id="avoid-same-family"
-                name="avoidSameFamily"
+                id="avoid-parent-child"
+                name="avoidParentChild"
                 type="checkbox"
-                [ngModel]="avoidSameFamily()"
-                (ngModelChange)="avoidSameFamily.set($event)"
+                [ngModel]="avoidParentChild()"
+                (ngModelChange)="avoidParentChild.set($event)"
               />
               <span>
-                <strong>Keep family members from drawing each other</strong>
-                <small>Each person will be matched with someone outside their own family.</small>
+                <strong>Parents cannot draw their children</strong>
+                <small>A parent may not be assigned one of their own children.</small>
               </span>
             </label>
           </div>
 
-          @if (avoidSameFamily() && !drawingAvailable()) {
+          <div class="rule-option">
+            <label for="avoid-child-parent">
+              <input
+                id="avoid-child-parent"
+                name="avoidChildParent"
+                type="checkbox"
+                [ngModel]="avoidChildParent()"
+                (ngModelChange)="avoidChildParent.set($event)"
+              />
+              <span>
+                <strong>Children cannot draw their parents</strong>
+                <small>A child may not be assigned one of their own parents.</small>
+              </span>
+            </label>
+          </div>
+
+          <div class="rule-option">
+            <label for="avoid-siblings">
+              <input
+                id="avoid-siblings"
+                name="avoidSiblings"
+                type="checkbox"
+                [ngModel]="avoidSiblings()"
+                (ngModelChange)="avoidSiblings.set($event)"
+              />
+              <span>
+                <strong>Siblings cannot draw each other</strong>
+                <small>Assignments are blocked in either direction.</small>
+              </span>
+            </label>
+          </div>
+
+          <div class="rule-option">
+            <label for="avoid-spouses">
+              <input
+                id="avoid-spouses"
+                name="avoidSpouses"
+                type="checkbox"
+                [ngModel]="avoidSpouses()"
+                (ngModelChange)="avoidSpouses.set($event)"
+              />
+              <span>
+                <strong>Spouses cannot draw each other</strong>
+                <small>Assignments are blocked in either direction.</small>
+              </span>
+            </label>
+          </div>
+
+          @if (!currentRulesCanDraw()) {
             <p class="rule-hint">
-              For this rule to work, no single family can have more than half of all participants.
-              You can turn this rule off to continue with your current group.
+              These rules may leave someone without an eligible recipient. Adjust the rules or
+              relationships to continue.
             </p>
           }
 
@@ -432,37 +387,79 @@
         }
 
         @case ('drawing') {
-          <p class="section-intro">
-            Names are assigned once, with one recipient per person. The result is visible only in
-            this account and browser.
-          </p>
+          <p class="section-intro">Review the randomized order of everyone in this exchange.</p>
 
-          @if (currentExchange.drawing; as drawing) {
-            <div class="drawing-results">
-              @for (pair of drawing; track pair.giverId) {
-                <div class="pair-row">
-                  <span>{{ pair.giver }}</span>
-                  <span class="pair-arrow" aria-hidden="true">→</span>
-                  <strong>{{ pair.recipient }}</strong>
+          <section class="drawing-order" aria-labelledby="drawing-order-title">
+            <div class="drawing-banner" role="status" aria-live="polite">
+              <span class="drawing-banner-mark" aria-hidden="true">✦</span>
+              <span id="drawing-order-title">Creating drawing order</span>
+            </div>
+            <ul class="drawing-list">
+              @for (member of drawingOrder(); track member.id) {
+                <li class="drawing-member">
+                  <span>{{ member.name }}</span>
+                </li>
+              }
+            </ul>
+          </section>
+
+          @if (!isShufflingNames() && !nameDrawStarted()) {
+            <div class="step-actions">
+              <button class="primary-button" type="button" (click)="startNameDraw()">
+                Start name draw
+              </button>
+            </div>
+          } @else if (isShufflingNames()) {
+            <p class="next-hint" role="status">Shuffling names…</p>
+          }
+
+          @if (nameDrawStarted()) {
+            <section class="name-draw-progress" aria-label="Name draw progress">
+              @if (!nameDrawFinished() && !nameDrawMessage() && !tryingAgain()) {
+                <p class="draw-current" role="status">
+                  Drawing a name for <strong>{{ currentGiverName() }}</strong
+                  >…
+                </p>
+              }
+              @if (nameDrawMessage()) {
+                <p
+                  class="draw-message"
+                  [class.draw-complete]="nameDrawFinished()"
+                  role="status"
+                  aria-live="polite"
+                >
+                  {{ nameDrawMessage() }}
+                </p>
+              } @else if (tryingAgain()) {
+                <p class="draw-message" role="status" aria-live="polite">Trying again…</p>
+              }
+              @if (nameDrawAssignments().length) {
+                <div class="drawing-results">
+                  @for (pair of nameDrawAssignments(); track pair.giverId) {
+                    <div class="pair-row">
+                      <span>{{ pair.giver }} drew</span>
+                      <strong>{{ pair.recipient }}</strong>
+                    </div>
+                  }
                 </div>
               }
-            </div>
-            <p class="result-note">
-              Keep these results private if participants should not see one another's assignments.
-            </p>
-          } @else {
-            <div class="section-empty">
-              <span aria-hidden="true">🎁</span>
-              <p>Everything is ready. Draw names to create the assignments.</p>
-            </div>
-            <button
-              class="primary-button draw-button"
-              type="button"
-              [disabled]="drawingBusy()"
-              (click)="drawNames()"
-            >
-              {{ drawingBusy() ? 'Drawing names…' : 'Draw names' }}
-            </button>
+            </section>
+            @if (nameDrawFinished()) {
+              <div class="step-actions draw-complete-actions">
+                <button class="primary-button" type="button" (click)="printDrawing()">Print</button>
+                <button class="secondary-button" type="button" (click)="startOver()">
+                  Start Over
+                </button>
+              </div>
+              <section class="print-document" aria-label="Printable drawing results">
+                <h1>{{ exchange()?.name }}</h1>
+                <div class="print-results">
+                  @for (pair of nameDrawAssignments(); track pair.giverId) {
+                    <p>{{ pair.giver }} drew {{ pair.recipient }}</p>
+                  }
+                </div>
+              </section>
+            }
           }
         }
       }

@@ -48,7 +48,10 @@ export class ExchangeService {
       name: cleanName,
       families: [],
       membersConfirmed: false,
-      avoidSameFamily: true,
+      avoidParentChild: true,
+      avoidChildParent: true,
+      avoidSiblings: true,
+      avoidSpouses: true,
       rulesConfigured: false,
       rulesSkipped: false,
       drawing: null,
@@ -192,10 +195,20 @@ export class ExchangeService {
     });
   }
 
-  async saveRules(userId: string, exchangeId: string, avoidSameFamily: boolean): Promise<void> {
+  async saveRules(
+    userId: string,
+    exchangeId: string,
+    avoidParentChild: boolean,
+    avoidChildParent: boolean,
+    avoidSiblings: boolean,
+    avoidSpouses: boolean,
+  ): Promise<void> {
     await this.update(userId, exchangeId, (exchange) => ({
       ...exchange,
-      avoidSameFamily,
+      avoidParentChild,
+      avoidChildParent,
+      avoidSiblings,
+      avoidSpouses,
       rulesConfigured: true,
       rulesSkipped: false,
       drawing: null,
@@ -205,7 +218,10 @@ export class ExchangeService {
   async skipRules(userId: string, exchangeId: string): Promise<void> {
     await this.update(userId, exchangeId, (exchange) => ({
       ...exchange,
-      avoidSameFamily: false,
+      avoidParentChild: true,
+      avoidChildParent: true,
+      avoidSiblings: true,
+      avoidSpouses: true,
       rulesConfigured: false,
       rulesSkipped: true,
       drawing: null,
@@ -447,7 +463,10 @@ function normalizeExchange(record: StoredExchange | GiftExchange): GiftExchange 
     name: raw.name,
     families: normalizedFamilies,
     membersConfirmed: typeof raw.membersConfirmed === 'boolean' ? raw.membersConfirmed : count >= 2,
-    avoidSameFamily: raw.avoidSameFamily ?? true,
+    avoidParentChild: raw.avoidParentChild ?? true,
+    avoidChildParent: raw.avoidChildParent ?? true,
+    avoidSiblings: raw.avoidSiblings ?? true,
+    avoidSpouses: raw.avoidSpouses ?? true,
     rulesConfigured: raw.rulesConfigured ?? false,
     rulesSkipped: raw.rulesSkipped ?? false,
     drawing,

@@ -88,16 +88,6 @@ export class MainPage {
     await this.router.navigate(['/exchanges', exchange.id, destination]);
   }
 
-  nextSection(exchange: GiftExchange): 'families' | 'rules' | 'drawing' {
-    if (!isFamilyStepComplete(exchange)) {
-      return 'families';
-    }
-    if (!isRulesStepComplete(exchange)) {
-      return 'rules';
-    }
-    return 'drawing';
-  }
-
   progressLabel(exchange: GiftExchange): string {
     if (exchange.drawing) {
       return 'Drawing complete';

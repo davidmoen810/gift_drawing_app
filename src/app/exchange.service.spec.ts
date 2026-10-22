@@ -31,7 +31,10 @@ describe('ExchangeService', () => {
     expect(saved.families[0].members.map((member) => member.firstName)).toEqual(['Alex', 'Sam']);
     expect(saved.membersConfirmed).toBe(true);
     expect(saved.rulesSkipped).toBe(true);
-    expect(saved.avoidSameFamily).toBe(false);
+    expect(saved.avoidParentChild).toBe(true);
+    expect(saved.avoidChildParent).toBe(true);
+    expect(saved.avoidSiblings).toBe(true);
+    expect(saved.avoidSpouses).toBe(true);
     expect(isFamilyStepComplete(saved)).toBe(true);
     expect(isRulesStepComplete(saved)).toBe(true);
 
@@ -54,27 +57,23 @@ describe('ExchangeService', () => {
     expect(members[0].id).not.toBe(members[1].id);
   });
 
-  it('blocks an impossible same-family draw and allows it when rules are skipped', async () => {
+  it('does not restrict drawings based on family grouping', async () => {
     const exchange = await service.create(userId, 'Holiday exchange');
-    await service.addFamily(userId, exchange.id, 'Parkers', ['Alex', 'Sam']);
-    await service.addFamily(userId, exchange.id, 'Moores', ['Taylor']);
+    await service.addFamily(userId, exchange.id, 'Parkers', ['Alex', 'Sam', 'Taylor']);
     await service.confirmMembers(userId, exchange.id);
-    await service.saveRules(userId, exchange.id, true);
+    await service.saveRules(userId, exchange.id, false, false, false, false);
 
     const saved = service.getLoaded(userId, exchange.id)!;
-    expect(canStartDrawing(saved)).toBe(false);
-    expect(generateDrawing(saved)).toBeNull();
-
-    await service.skipRules(userId, exchange.id);
-    expect(canStartDrawing(service.getLoaded(userId, exchange.id)!)).toBe(true);
+    expect(canStartDrawing(saved)).toBe(true);
+    expect(generateDrawing(saved)).toHaveLength(3);
   });
 
-  it('draws a one-to-one assignment with no self or same-family matches', async () => {
+  it('draws a one-to-one assignment with no self matches', async () => {
     const exchange = await service.create(userId, 'Holiday exchange');
     await service.addFamily(userId, exchange.id, 'Parkers', ['Alex', 'Sam']);
     await service.addFamily(userId, exchange.id, 'Moores', ['Taylor', 'Jordan']);
     await service.confirmMembers(userId, exchange.id);
-    await service.saveRules(userId, exchange.id, true);
+    await service.saveRules(userId, exchange.id, false, false, false, false);
 
     const saved = service.getLoaded(userId, exchange.id)!;
     const drawing = generateDrawing(saved)!;
@@ -83,12 +82,68 @@ describe('ExchangeService', () => {
     expect(drawing.map((pair) => pair.giver).sort()).toEqual(people.slice().sort());
     expect(drawing.map((pair) => pair.recipient).sort()).toEqual(people.slice().sort());
     expect(drawing.every((pair) => pair.giver !== pair.recipient)).toBe(true);
+  });
 
-    const familyByName = new Map(
-      exchangeParticipants(saved).map((participant) => [participant.name, participant.familyId]),
-    );
+  it('prevents parent-child, sibling, and spouse assignments in either direction', async () => {
+    const exchange = await service.create(userId, 'Holiday exchange');
+    await service.addFamily(userId, exchange.id, 'Parkers', ['Alex']);
+    await service.addFamily(userId, exchange.id, 'Moores', ['Sam']);
+    await service.addFamily(userId, exchange.id, 'Chens', ['Taylor']);
+    await service.addFamily(userId, exchange.id, 'Reeds', ['Jordan']);
+    await service.addFamily(userId, exchange.id, 'Browns', ['Casey']);
+    await service.confirmMembers(userId, exchange.id);
+    const members = service
+      .getLoaded(userId, exchange.id)!
+      .families.map((family) => family.members[0]);
+    const [parent, child, sibling, spouse] = members;
+    await service.setRelationship(userId, exchange.id, parent.id, 'children', [child.id]);
+    await service.setRelationship(userId, exchange.id, parent.id, 'siblings', [sibling.id]);
+    await service.setRelationship(userId, exchange.id, parent.id, 'spouse', spouse.id);
+    await service.saveRules(userId, exchange.id, true, true, true, true);
+
+    const saved = service.getLoaded(userId, exchange.id)!;
+    expect(canStartDrawing(saved)).toBe(true);
+    const drawing = generateDrawing(saved)!;
+    const assignments = new Set(drawing.map((pair) => `${pair.giverId}:${pair.recipientId}`));
+    expect(assignments.has(`${parent.id}:${child.id}`)).toBe(false);
+    expect(assignments.has(`${child.id}:${parent.id}`)).toBe(false);
+    for (const relatedId of [sibling.id, spouse.id]) {
+      expect(assignments.has(`${parent.id}:${relatedId}`)).toBe(false);
+      expect(assignments.has(`${relatedId}:${parent.id}`)).toBe(false);
+    }
+  });
+
+  it('detects when parent-child restrictions leave no possible drawing', async () => {
+    const exchange = await service.create(userId, 'Holiday exchange');
+    await service.addFamily(userId, exchange.id, 'Parkers', ['Parent', 'Child']);
+    await service.confirmMembers(userId, exchange.id);
+    const [parent, child] = service.getLoaded(userId, exchange.id)!.families[0].members;
+    await service.setRelationship(userId, exchange.id, parent.id, 'children', [child.id]);
+    await service.saveRules(userId, exchange.id, true, true, false, false);
+
+    const saved = service.getLoaded(userId, exchange.id)!;
+    expect(canStartDrawing(saved)).toBe(false);
+    expect(generateDrawing(saved)).toBeNull();
+  });
+
+  it('allows a child to draw a parent when child-to-parent assignments are disabled', async () => {
+    const exchange = await service.create(userId, 'Holiday exchange');
+    await service.addFamily(userId, exchange.id, 'Parkers', ['Parent']);
+    await service.addFamily(userId, exchange.id, 'Moores', ['Child']);
+    await service.addFamily(userId, exchange.id, 'Chens', ['Other']);
+    await service.confirmMembers(userId, exchange.id);
+    const [parent, child] = service
+      .getLoaded(userId, exchange.id)!
+      .families.map((family) => family.members[0]);
+    await service.setRelationship(userId, exchange.id, parent.id, 'children', [child.id]);
+    await service.saveRules(userId, exchange.id, true, false, false, false);
+
+    const saved = service.getLoaded(userId, exchange.id)!;
+    expect(canStartDrawing(saved)).toBe(true);
     expect(
-      drawing.every((pair) => familyByName.get(pair.giver) !== familyByName.get(pair.recipient)),
+      generateDrawing(saved)?.some(
+        (pair) => pair.giverId === child.id && pair.recipientId === parent.id,
+      ),
     ).toBe(true);
   });
 
@@ -146,7 +201,6 @@ describe('ExchangeService', () => {
         },
       ],
       membersConfirmed: true,
-      avoidSameFamily: false,
       rulesConfigured: false,
       rulesSkipped: true,
       drawing: null,
@@ -181,7 +235,6 @@ describe('ExchangeService', () => {
           members: ['Alex', 'Sam'],
         },
       ],
-      avoidSameFamily: true,
       rulesConfigured: false,
       rulesSkipped: false,
       drawing: null,
