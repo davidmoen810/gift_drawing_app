@@ -1,59 +1,37 @@
-# GiftDrawingApp
+# Gift Drawing
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 22.2.4.
+An Angular app with Firebase email/password authentication.
+
+## Firebase setup
+
+1. Create a Firebase project and register a web app in the Firebase console.
+2. In **Authentication → Sign-in method**, enable **Email/Password**.
+3. Copy the Firebase web app config object into `src/environments/environment.ts`, exporting it as `firebaseConfig`. Keep the existing `export const firebaseConfig = { ... };` structure and replace its values with the values from the console; do not paste the console's `initializeApp` or Analytics setup code.
+4. Add your local development host (for example, `localhost`) to **Authentication → Settings → Authorized domains** if it is not already listed.
+
+The web app config is used by the browser and is not a service-account credential. Never put a service-account JSON key or other private server credentials in this frontend. Restrict the Firebase API key as appropriate, and configure Firebase Security Rules before storing user data.
+
+Until the Firebase config is filled in, the app displays setup instructions instead of attempting authentication.
 
 ## Development server
 
-To start a local development server, run:
+Install dependencies and start the development server:
 
 ```bash
-ng serve
+npm install
+npm start
 ```
 
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
-
-## Code scaffolding
-
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
-
-```bash
-ng generate component component-name
-```
-
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
-
-```bash
-ng generate --help
-```
+Open `http://localhost:4200/`.
 
 ## Building
 
-To build the project run:
-
 ```bash
-ng build
+npm run build
 ```
 
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
-
-## Running unit tests
-
-To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
+## Tests
 
 ```bash
 ng test
 ```
-
-## Running end-to-end tests
-
-For end-to-end (e2e) testing, run:
-
-```bash
-ng e2e
-```
-
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
-
-## Additional Resources
-
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.

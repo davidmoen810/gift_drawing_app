@@ -1,0 +1,253 @@
+:host {
+  display: block;
+  min-height: 100vh;
+}
+
+.site-header {
+  align-items: center;
+  display: flex;
+  height: 5rem;
+  margin: 0 auto;
+  max-width: 68rem;
+  padding: 0 2rem;
+}
+
+.brand {
+  align-items: center;
+  color: #26352d;
+  display: inline-flex;
+  font-size: 1.05rem;
+  font-weight: 700;
+  gap: 0.7rem;
+  text-decoration: none;
+}
+
+.brand-mark {
+  align-items: center;
+  background: #315c45;
+  border-radius: 0.75rem;
+  color: #fff;
+  display: inline-flex;
+  height: 2.25rem;
+  justify-content: center;
+  width: 2.25rem;
+}
+
+main {
+  align-items: center;
+  display: grid;
+  gap: 5rem;
+  grid-template-columns: minmax(0, 1fr) minmax(19rem, 25rem);
+  margin: 0 auto;
+  max-width: 68rem;
+  min-height: calc(100vh - 5rem);
+  padding: 2rem;
+}
+
+.welcome {
+  max-width: 34rem;
+}
+
+.eyebrow {
+  color: #557963;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  margin: 0 0 1.25rem;
+  text-transform: uppercase;
+}
+
+h1 {
+  color: #26352d;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: clamp(2.75rem, 7vw, 5rem);
+  font-weight: 500;
+  letter-spacing: -0.045em;
+  line-height: 1.05;
+  margin: 0;
+}
+
+.intro {
+  color: #647168;
+  font-size: 1.125rem;
+  line-height: 1.7;
+  margin: 1.5rem 0 0;
+  max-width: 32rem;
+}
+
+.auth-card {
+  background: #fff;
+  border: 1px solid #e9e9e1;
+  border-radius: 1.25rem;
+  box-shadow: 0 1.25rem 3.5rem rgb(38 53 45 / 8%);
+  padding: 2.25rem;
+}
+
+.auth-card h2 {
+  color: #26352d;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 1.8rem;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.card-intro,
+.signed-in-email {
+  color: #647168;
+  line-height: 1.6;
+  margin: 0.65rem 0 1.6rem;
+}
+
+form {
+  display: grid;
+  gap: 0.65rem;
+}
+
+label {
+  color: #39483e;
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-top: 0.35rem;
+}
+
+input {
+  background: #fff;
+  border: 1px solid #d9ded8;
+  border-radius: 0.6rem;
+  color: #26352d;
+  font: inherit;
+  min-height: 2.9rem;
+  padding: 0.65rem 0.8rem;
+  width: 100%;
+}
+
+input:focus {
+  border-color: #557963;
+  outline: 3px solid rgb(85 121 99 / 18%);
+}
+
+.primary-button,
+.secondary-button {
+  border: 0;
+  border-radius: 0.65rem;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 650;
+  min-height: 3rem;
+  padding: 0.7rem 1rem;
+}
+
+.primary-button {
+  background: #315c45;
+  color: #fff;
+  margin-top: 0.65rem;
+}
+
+.primary-button:hover:not(:disabled) {
+  background: #264b38;
+}
+
+.primary-button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.secondary-button {
+  background: #edf2ed;
+  color: #315c45;
+  margin-top: 1.25rem;
+}
+
+.mode-switch {
+  color: #647168;
+  font-size: 0.875rem;
+  margin: 1.25rem 0 0;
+  text-align: center;
+}
+
+.mode-switch button {
+  background: none;
+  border: 0;
+  color: #315c45;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 650;
+  padding: 0.25rem;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.error-message {
+  color: #a42c2c;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  margin: 0.25rem 0 0;
+}
+
+.setup-notice h2 {
+  font-size: 1.55rem;
+}
+
+.setup-icon {
+  align-items: center;
+  background: #edf2ed;
+  border-radius: 50%;
+  color: #315c45;
+  display: inline-flex;
+  font-size: 1.4rem;
+  height: 2.5rem;
+  justify-content: center;
+  margin-bottom: 1rem;
+  width: 2.5rem;
+}
+
+.setup-notice > p,
+.signed-in > p:not(.eyebrow) {
+  color: #647168;
+  line-height: 1.6;
+}
+
+.setup-notice ol {
+  color: #39483e;
+  line-height: 1.6;
+  padding-left: 1.3rem;
+}
+
+.setup-notice li + li {
+  margin-top: 0.55rem;
+}
+
+.setup-notice code {
+  background: #f1f3ef;
+  border-radius: 0.25rem;
+  color: #315c45;
+  font-size: 0.82em;
+  padding: 0.15rem 0.3rem;
+}
+
+.setup-notice .config-note {
+  border-top: 1px solid #e9e9e1;
+  font-size: 0.8rem;
+  margin: 1.25rem 0 0;
+  padding-top: 1rem;
+}
+
+@media (max-width: 600px) {
+  .site-header {
+    height: 4.5rem;
+    padding: 0 1.25rem;
+  }
+
+  main {
+    gap: 2.5rem;
+    grid-template-columns: 1fr;
+    min-height: calc(100vh - 4.5rem);
+    padding: 1.5rem;
+  }
+
+  .auth-card {
+    padding: 1.5rem;
+  }
+}

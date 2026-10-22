@@ -1,0 +1,36 @@
+<header class="site-header">
+  <a class="brand" routerLink="/" aria-label="Gift Drawing home">
+    <span class="brand-mark" aria-hidden="true">G</span>
+    <span>Gift Drawing</span>
+  </a>
+  <button class="sign-out-button" type="button" (click)="signOut()" [disabled]="busy()">
+    {{ busy() ? 'Signing out…' : 'Sign out' }}
+  </button>
+</header>
+
+<main>
+  <section class="dashboard-heading" aria-labelledby="dashboard-title">
+    <p class="eyebrow">Your space</p>
+    <h1 id="dashboard-title">Welcome{{ auth.user()?.email ? ', ' + auth.user()?.email : '' }}.</h1>
+    <p class="intro">Keep all your gift exchanges and celebrations in one place.</p>
+  </section>
+
+  @if (errorMessage()) {
+    <p class="error-message" role="alert">{{ errorMessage() }}</p>
+  }
+
+  <section class="exchange-card" aria-labelledby="exchanges-title">
+    <div class="card-heading">
+      <div>
+        <p class="eyebrow">Let the fun begin</p>
+        <h2 id="exchanges-title">Your gift exchanges</h2>
+      </div>
+      <span class="gift-icon" aria-hidden="true">✳</span>
+    </div>
+    <div class="empty-state">
+      <span class="empty-icon" aria-hidden="true">🎁</span>
+      <h3>Your first exchange starts here.</h3>
+      <p>When you create a gift exchange, it will show up here.</p>
+    </div>
+  </section>
+</main>

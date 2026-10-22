@@ -1,0 +1,85 @@
+<header class="site-header">
+  <a class="brand" routerLink="/" aria-label="Gift Drawing home">
+    <span class="brand-mark" aria-hidden="true">G</span>
+    <span>Gift Drawing</span>
+  </a>
+</header>
+
+<main>
+  <section class="welcome" aria-labelledby="welcome-title">
+    <p class="eyebrow">A little more joy, together</p>
+    <h1 id="welcome-title">Make gift giving feel effortless.</h1>
+    <p class="intro">
+      Bring everyone together for a thoughtful gift exchange. Your next celebration starts here.
+    </p>
+  </section>
+
+  <section class="auth-card" aria-labelledby="auth-title">
+    @if (!auth.isConfigured()) {
+      <div class="setup-notice">
+        <span class="setup-icon" aria-hidden="true">✳</span>
+        <h2 id="auth-title">Connect your Firebase project</h2>
+        <p>Set up Firebase Authentication to enable secure email sign-in.</p>
+        <ol>
+          <li>Create a Firebase project and add a web app.</li>
+          <li>Enable <strong>Email/Password</strong> under Authentication sign-in providers.</li>
+          <li>Copy its web app settings into <code>src/environments/environment.ts</code>.</li>
+        </ol>
+        <p class="config-note">
+          Use the Firebase web app config only. Never add a service-account key to this app.
+        </p>
+      </div>
+    } @else {
+      <h2 id="auth-title">{{ mode() === 'sign-in' ? 'Welcome back' : 'Create your account' }}</h2>
+      <p class="card-intro">
+        {{
+          mode() === 'sign-in'
+            ? 'Sign in to continue to your gift exchanges.'
+            : 'Sign up to start bringing your group together.'
+        }}
+      </p>
+
+      <form (ngSubmit)="submit()">
+        <label for="email">Email address</label>
+        <input
+          id="email"
+          name="email"
+          type="email"
+          autocomplete="email"
+          [(ngModel)]="email"
+          required
+        />
+
+        <label for="password">Password</label>
+        <input
+          id="password"
+          name="password"
+          type="password"
+          [attr.autocomplete]="mode() === 'sign-up' ? 'new-password' : 'current-password'"
+          [attr.minlength]="mode() === 'sign-up' ? 6 : null"
+          [(ngModel)]="password"
+          required
+        />
+        @if (errorMessage() || auth.authError()) {
+          <p class="error-message" role="alert">{{ errorMessage() || auth.authError() }}</p>
+        }
+        <button class="primary-button" type="submit" [disabled]="busy()">
+          {{
+            busy()
+              ? 'Please wait…'
+              : mode() === 'sign-in'
+                ? 'Sign in'
+                : 'Create account'
+          }}
+        </button>
+      </form>
+
+      <p class="mode-switch">
+        {{ mode() === 'sign-in' ? 'New to Gift Drawing?' : 'Already have an account?' }}
+        <button type="button" (click)="toggleMode()">
+          {{ mode() === 'sign-in' ? 'Create an account' : 'Sign in' }}
+        </button>
+      </p>
+    }
+  </section>
+</main>
