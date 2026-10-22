@@ -1,0 +1,471 @@
+<header class="site-header">
+  <a class="brand" routerLink="/main" aria-label="Back to exchanges">
+    <span class="brand-mark" aria-hidden="true">G</span>
+    <span>Gift Drawing</span>
+  </a>
+  <a class="dashboard-link" routerLink="/main">All exchanges</a>
+</header>
+
+@if (exchange(); as currentExchange) {
+  <main>
+    <section class="exchange-heading" aria-labelledby="exchange-title">
+      <p class="eyebrow">Gift exchange</p>
+      <h1 id="exchange-title">{{ currentExchange.name }}</h1>
+      <p class="intro">Work through each step. You can return to earlier steps at any time.</p>
+    </section>
+
+    <nav class="stepper" aria-label="Gift exchange steps">
+      @for (step of steps; track step.id) {
+        @if (
+          step.id === 'families' ||
+          (step.id === 'rules' && familiesComplete()) ||
+          (step.id === 'drawing' && drawingAvailable())
+        ) {
+          <a
+            class="step"
+            [class.current]="section() === step.id"
+            [class.completed]="
+              stepStatus(step.id) === 'Complete' || stepStatus(step.id) === 'Skipped'
+            "
+            [routerLink]="['/exchanges', currentExchange.id, step.id]"
+            [attr.aria-current]="section() === step.id ? 'step' : null"
+          >
+            <span class="step-number">{{ step.number }}</span>
+            <span class="step-copy">
+              <span class="step-label">{{ step.label }}</span>
+              <span class="step-status">{{ stepStatus(step.id) }}</span>
+            </span>
+          </a>
+        } @else {
+          <div class="step locked" aria-disabled="true">
+            <span class="step-number">{{ step.number }}</span>
+            <span class="step-copy">
+              <span class="step-label">{{ step.label }}</span>
+              <span class="step-status">
+                @if (step.id === 'rules') {
+                  Finish adding family members
+                } @else if (familiesComplete() && rulesComplete()) {
+                  Adjust rules or participants
+                } @else {
+                  Complete families and rules
+                }
+              </span>
+            </span>
+            <span class="lock-icon" aria-hidden="true">🔒</span>
+          </div>
+        }
+      }
+    </nav>
+
+    <section class="section-card" aria-labelledby="section-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">
+            Step {{ section() === 'families' ? '1' : section() === 'rules' ? '2' : '3' }} of 3
+          </p>
+          <h2 id="section-title">{{ sectionTitle() }}</h2>
+        </div>
+        @if (section() === 'families') {
+          <span class="section-count">{{ participantCount() }} people</span>
+        }
+      </div>
+
+      @if (errorMessage()) {
+        <p class="error-message" role="alert">{{ errorMessage() }}</p>
+      }
+
+      @switch (section()) {
+        @case ('families') {
+          <p class="section-intro">
+            Add the first names of everyone joining this exchange. When the list is complete, assign
+            each person's relationships.
+          </p>
+
+          @if (!currentExchange.membersConfirmed) {
+            @if (currentExchange.families.length) {
+              <div class="family-list">
+                @for (family of currentExchange.families; track trackFamily($index, family)) {
+                  <article class="family-row">
+                    <div>
+                      <h3>{{ family.name }}</h3>
+                      <p>{{ familyMembersLabel(family) }}</p>
+                    </div>
+                    <button
+                      class="remove-button"
+                      type="button"
+                      [attr.aria-label]="'Remove ' + family.name"
+                      (click)="removeFamily(family)"
+                    >
+                      Remove
+                    </button>
+                  </article>
+                }
+              </div>
+            } @else {
+              <div class="section-empty">
+                <span aria-hidden="true">👨‍👩‍👧‍👦</span>
+                <p>No family members added yet. Start by adding the first family below.</p>
+              </div>
+            }
+
+            <form class="family-form" (ngSubmit)="addFamily()">
+              <h3>Add family members</h3>
+              <label for="family-name">Family name</label>
+              <input
+                id="family-name"
+                name="familyName"
+                type="text"
+                [(ngModel)]="familyName"
+                placeholder="e.g. The Parkers"
+                required
+              />
+              <label for="family-members">First names</label>
+              <textarea
+                id="family-members"
+                name="familyMembers"
+                [(ngModel)]="familyMembers"
+                placeholder="Enter one first name per line, or separate names with commas"
+                rows="3"
+                required
+              ></textarea>
+              <button class="secondary-button" type="submit">Add family members</button>
+            </form>
+
+            <div class="step-actions">
+              <span class="next-hint">
+                Add at least 2 people, then confirm the list to assign relationships.
+              </span>
+              <button
+                class="primary-button"
+                type="button"
+                [disabled]="participantCount() < 2"
+                (click)="confirmMembers()"
+              >
+                Done adding family members
+              </button>
+            </div>
+          } @else {
+            <div class="relationship-heading">
+              <div>
+                <h3>Assign relationships</h3>
+                <p>
+                  Choose a person, then drag names into a relationship—or add them from the lists.
+                </p>
+              </div>
+              @if (relationshipSaving()) {
+                <span class="save-status" role="status">Saving…</span>
+              } @else if (relationshipSaved()) {
+                <span class="save-status" role="status">Saved</span>
+              }
+            </div>
+
+            <div class="relationship-editor">
+              <aside class="member-picker" aria-label="Choose a person to edit">
+                @for (family of currentExchange.families; track trackFamily($index, family)) {
+                  <section class="picker-family">
+                    <h4>{{ family.name }}</h4>
+                    @for (member of family.members; track trackMember($index, member)) {
+                      <button
+                        class="member-chip"
+                        type="button"
+                        draggable="true"
+                        [class.selected]="selectedMember()?.id === member.id"
+                        [attr.aria-pressed]="selectedMember()?.id === member.id"
+                        [attr.aria-label]="
+                          'Edit ' + member.firstName + '. Drag to assign a relationship.'
+                        "
+                        (click)="selectMember(member.id)"
+                        (dragstart)="startMemberDrag($event, member.id)"
+                      >
+                        <span class="drag-handle" aria-hidden="true">⠿</span>
+                        {{ member.firstName }}
+                      </button>
+                    }
+                  </section>
+                }
+              </aside>
+
+              @if (selectedMember(); as member) {
+                <section class="relationship-editor-main" aria-label="Edit relationships">
+                  <h4 class="editing-person">{{ member.firstName }}</h4>
+
+                  <section
+                    class="relationship-zone"
+                    [class.drag-over]="dropTarget() === 'children'"
+                    [attr.aria-label]="'Children for ' + member.firstName"
+                    (dragover)="allowDrop($event, 'children')"
+                    (dragleave)="clearDropTarget()"
+                    (drop)="dropRelationship($event, 'children')"
+                  >
+                    <div class="zone-heading">
+                      <div>
+                        <h5>Children</h5>
+                        <p>Drop one or more names here.</p>
+                      </div>
+                    </div>
+                    <div class="relationship-chips">
+                      @for (relatedId of member.relationships.childrenIds; track relatedId) {
+                        <span class="relationship-chip">
+                          {{ memberName(relatedId) }}
+                          <button
+                            type="button"
+                            [attr.aria-label]="'Remove ' + memberName(relatedId) + ' from Children'"
+                            [disabled]="relationshipSaving()"
+                            (click)="removeRelationship('children', relatedId)"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      } @empty {
+                        <span class="zone-empty">Drop a name here</span>
+                      }
+                    </div>
+                    <div class="relationship-add">
+                      <label>
+                        <span class="visually-hidden">Choose a child</span>
+                        <select
+                          name="childrenCandidate"
+                          [ngModel]="relationshipCandidates().children"
+                          [disabled]="relationshipSaving()"
+                          (ngModelChange)="setRelationshipCandidate('children', $event)"
+                        >
+                          <option value="">Choose a person</option>
+                          @for (
+                            family of availableRelationshipFamilies('children');
+                            track family.id
+                          ) {
+                            <optgroup [label]="family.name">
+                              @for (person of family.members; track person.id) {
+                                <option [value]="person.id">{{ person.firstName }}</option>
+                              }
+                            </optgroup>
+                          }
+                        </select>
+                      </label>
+                      <button
+                        class="secondary-button"
+                        type="button"
+                        [disabled]="relationshipSaving() || !canAddRelationship('children')"
+                        (click)="addRelationship('children')"
+                      >
+                        Add child
+                      </button>
+                    </div>
+                  </section>
+
+                  <section
+                    class="relationship-zone"
+                    [class.drag-over]="dropTarget() === 'siblings'"
+                    [attr.aria-label]="'Siblings for ' + member.firstName"
+                    (dragover)="allowDrop($event, 'siblings')"
+                    (dragleave)="clearDropTarget()"
+                    (drop)="dropRelationship($event, 'siblings')"
+                  >
+                    <div class="zone-heading">
+                      <div>
+                        <h5>Siblings</h5>
+                        <p>Drop one or more names here.</p>
+                      </div>
+                    </div>
+                    <div class="relationship-chips">
+                      @for (relatedId of member.relationships.siblingIds; track relatedId) {
+                        <span class="relationship-chip">
+                          {{ memberName(relatedId) }}
+                          <button
+                            type="button"
+                            [attr.aria-label]="'Remove ' + memberName(relatedId) + ' from Siblings'"
+                            [disabled]="relationshipSaving()"
+                            (click)="removeRelationship('siblings', relatedId)"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      } @empty {
+                        <span class="zone-empty">Drop a name here</span>
+                      }
+                    </div>
+                    <div class="relationship-add">
+                      <label>
+                        <span class="visually-hidden">Choose a sibling</span>
+                        <select
+                          name="siblingsCandidate"
+                          [ngModel]="relationshipCandidates().siblings"
+                          [disabled]="relationshipSaving()"
+                          (ngModelChange)="setRelationshipCandidate('siblings', $event)"
+                        >
+                          <option value="">Choose a person</option>
+                          @for (
+                            family of availableRelationshipFamilies('siblings');
+                            track family.id
+                          ) {
+                            <optgroup [label]="family.name">
+                              @for (person of family.members; track person.id) {
+                                <option [value]="person.id">{{ person.firstName }}</option>
+                              }
+                            </optgroup>
+                          }
+                        </select>
+                      </label>
+                      <button
+                        class="secondary-button"
+                        type="button"
+                        [disabled]="relationshipSaving() || !canAddRelationship('siblings')"
+                        (click)="addRelationship('siblings')"
+                      >
+                        Add sibling
+                      </button>
+                    </div>
+                  </section>
+
+                  <section
+                    class="relationship-zone"
+                    [class.drag-over]="dropTarget() === 'spouse'"
+                    [attr.aria-label]="'Spouse for ' + member.firstName"
+                    (dragover)="allowDrop($event, 'spouse')"
+                    (dragleave)="clearDropTarget()"
+                    (drop)="dropRelationship($event, 'spouse')"
+                  >
+                    <div class="zone-heading">
+                      <div>
+                        <h5>Spouse</h5>
+                        <p>Drop one name here.</p>
+                      </div>
+                    </div>
+                    <div class="relationship-chips">
+                      @if (member.relationships.spouseId; as spouseId) {
+                        <span class="relationship-chip">
+                          {{ memberName(spouseId) }}
+                          <button
+                            type="button"
+                            [attr.aria-label]="'Remove ' + memberName(spouseId) + ' as Spouse'"
+                            [disabled]="relationshipSaving()"
+                            (click)="removeRelationship('spouse', spouseId)"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      } @else {
+                        <span class="zone-empty">Drop a name here</span>
+                      }
+                    </div>
+                    <div class="relationship-add">
+                      <label>
+                        <span class="visually-hidden">Choose a spouse</span>
+                        <select
+                          name="spouseCandidate"
+                          [ngModel]="relationshipCandidates().spouse"
+                          [disabled]="relationshipSaving()"
+                          (ngModelChange)="setRelationshipCandidate('spouse', $event)"
+                        >
+                          <option value="">Choose a person</option>
+                          @for (
+                            family of availableRelationshipFamilies('spouse');
+                            track family.id
+                          ) {
+                            <optgroup [label]="family.name">
+                              @for (person of family.members; track person.id) {
+                                <option [value]="person.id">{{ person.firstName }}</option>
+                              }
+                            </optgroup>
+                          }
+                        </select>
+                      </label>
+                      <button
+                        class="secondary-button"
+                        type="button"
+                        [disabled]="relationshipSaving() || !canAddRelationship('spouse')"
+                        (click)="addRelationship('spouse')"
+                      >
+                        Set spouse
+                      </button>
+                    </div>
+                  </section>
+                </section>
+              }
+            </div>
+
+            <div class="step-actions">
+              <button class="secondary-button" type="button" (click)="editMembers()">
+                Edit family members
+              </button>
+              <a class="primary-button" [routerLink]="['/exchanges', currentExchange.id, 'rules']">
+                Continue to rules
+              </a>
+            </div>
+          }
+        }
+
+        @case ('rules') {
+          <p class="section-intro">
+            Choose who can draw whom. You can skip this step and use the default rules.
+          </p>
+
+          <div class="rule-option">
+            <label for="avoid-same-family">
+              <input
+                id="avoid-same-family"
+                name="avoidSameFamily"
+                type="checkbox"
+                [ngModel]="avoidSameFamily()"
+                (ngModelChange)="avoidSameFamily.set($event)"
+              />
+              <span>
+                <strong>Keep family members from drawing each other</strong>
+                <small>Each person will be matched with someone outside their own family.</small>
+              </span>
+            </label>
+          </div>
+
+          @if (avoidSameFamily() && !drawingAvailable()) {
+            <p class="rule-hint">
+              For this rule to work, no single family can have more than half of all participants.
+              You can turn this rule off to continue with your current group.
+            </p>
+          }
+
+          <div class="step-actions rule-actions">
+            <button class="secondary-button" type="button" (click)="skipRules()">Skip rules</button>
+            <button class="primary-button" type="button" (click)="saveRules()">
+              Save rules and continue
+            </button>
+          </div>
+        }
+
+        @case ('drawing') {
+          <p class="section-intro">
+            Names are assigned once, with one recipient per person. The result is visible only in
+            this account and browser.
+          </p>
+
+          @if (currentExchange.drawing; as drawing) {
+            <div class="drawing-results">
+              @for (pair of drawing; track pair.giverId) {
+                <div class="pair-row">
+                  <span>{{ pair.giver }}</span>
+                  <span class="pair-arrow" aria-hidden="true">→</span>
+                  <strong>{{ pair.recipient }}</strong>
+                </div>
+              }
+            </div>
+            <p class="result-note">
+              Keep these results private if participants should not see one another's assignments.
+            </p>
+          } @else {
+            <div class="section-empty">
+              <span aria-hidden="true">🎁</span>
+              <p>Everything is ready. Draw names to create the assignments.</p>
+            </div>
+            <button
+              class="primary-button draw-button"
+              type="button"
+              [disabled]="drawingBusy()"
+              (click)="drawNames()"
+            >
+              {{ drawingBusy() ? 'Drawing names…' : 'Draw names' }}
+            </button>
+          }
+        }
+      }
+    </section>
+  </main>
+}

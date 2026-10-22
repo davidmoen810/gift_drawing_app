@@ -22,15 +22,58 @@
   <section class="exchange-card" aria-labelledby="exchanges-title">
     <div class="card-heading">
       <div>
-        <p class="eyebrow">Let the fun begin</p>
+        <p class="eyebrow">Your celebrations</p>
         <h2 id="exchanges-title">Your gift exchanges</h2>
       </div>
       <span class="gift-icon" aria-hidden="true">✳</span>
     </div>
-    <div class="empty-state">
-      <span class="empty-icon" aria-hidden="true">🎁</span>
-      <h3>Your first exchange starts here.</h3>
-      <p>When you create a gift exchange, it will show up here.</p>
-    </div>
+
+    @if (exchanges().length) {
+      <div class="exchange-list">
+        @for (exchange of exchanges(); track exchange.id) {
+          <article class="exchange-row">
+            <div>
+              <h3>{{ exchange.name }}</h3>
+              <p>{{ progressLabel(exchange) }}</p>
+            </div>
+            <button
+              class="primary-button"
+              type="button"
+              (click)="openExchange(exchange, nextSection(exchange))"
+            >
+              {{ exchange.drawing ? 'View drawing' : 'Continue' }}
+            </button>
+          </article>
+        }
+      </div>
+    } @else {
+      <div class="empty-state">
+        <span class="empty-icon" aria-hidden="true">🎁</span>
+        <h3>Your first exchange starts here.</h3>
+        <p>Create an exchange, then add families, set your rules, and draw names.</p>
+      </div>
+    }
   </section>
+
+  <form class="create-form" (ngSubmit)="createExchange()">
+    <label for="exchange-name">Start a new gift exchange</label>
+    <div class="create-controls">
+      <input
+        id="exchange-name"
+        name="exchangeName"
+        type="text"
+        placeholder="e.g. Winter gift exchange"
+        [ngModel]="exchangeName()"
+        (ngModelChange)="exchangeName.set($event)"
+        required
+      />
+      <button class="primary-button" type="submit" [disabled]="createBusy()">
+        {{ createBusy() ? 'Creating…' : 'Create exchange' }}
+      </button>
+    </div>
+    @if (createError()) {
+      <p class="error-message" role="alert">{{ createError() }}</p>
+    }
+    <p class="storage-note">Exchange progress is saved in this browser on this device.</p>
+  </form>
 </main>

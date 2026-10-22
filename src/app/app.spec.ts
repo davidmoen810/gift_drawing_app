@@ -1,23 +1,34 @@
+import 'fake-indexeddb/auto';
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
+import { exchangeSectionGuard, signedInGuard, signedOutGuard } from './auth.guards';
+import { ExchangePage } from './exchange-page';
+import { ExchangeService } from './exchange.service';
 import { LoginPage } from './login-page';
 import { MainPage } from './main-page';
-import { signedInGuard, signedOutGuard } from './auth.guards';
 import { AuthService } from './auth.service';
 
 describe('LoginPage', () => {
-  const user = signal<{ email: string } | null>(null);
+  const user = signal<{ email: string; uid: string } | null>(null);
+  let testUserId: string;
 
   beforeEach(async () => {
+    testUserId = globalThis.crypto.randomUUID();
     user.set(null);
     await TestBed.configureTestingModule({
-      imports: [LoginPage, MainPage],
+      imports: [LoginPage, MainPage, ExchangePage],
       providers: [
         provideRouter([
           { path: '', component: LoginPage, canActivate: [signedOutGuard] },
           { path: 'main', component: MainPage, canActivate: [signedInGuard] },
+          {
+            path: 'exchanges/:exchangeId/:section',
+            component: ExchangePage,
+            canActivate: [signedInGuard, exchangeSectionGuard],
+          },
         ]),
+        ExchangeService,
         {
           provide: AuthService,
           useValue: {
@@ -25,8 +36,8 @@ describe('LoginPage', () => {
             user,
             authError: signal(null),
             waitForAuthState: async () => user(),
-            signIn: async () => user.set({ email: 'guest@example.com' }),
-            signUp: async () => user.set({ email: 'guest@example.com' }),
+            signIn: async () => user.set({ email: 'guest@example.com', uid: testUserId }),
+            signUp: async () => user.set({ email: 'guest@example.com', uid: testUserId }),
             signOut: async () => user.set(null),
           },
         },
@@ -38,7 +49,9 @@ describe('LoginPage', () => {
     const fixture = TestBed.createComponent(LoginPage);
     await fixture.whenStable();
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('h1')?.textContent).toContain('Make gift giving feel effortless.');
+    expect(compiled.querySelector('h1')?.textContent).toContain(
+      'Make gift giving feel effortless.',
+    );
     expect(compiled.textContent).toContain('Your next celebration starts here.');
     expect(compiled.querySelector('input[type="email"]')).toBeTruthy();
     expect(compiled.querySelector('input[type="password"]')).toBeTruthy();
@@ -64,9 +77,32 @@ describe('LoginPage', () => {
   });
 
   it('should redirect signed-in visitors from sign-in to /main', async () => {
-    user.set({ email: 'guest@example.com' });
+    user.set({ email: 'guest@example.com', uid: testUserId });
     const router = TestBed.inject(Router);
     await router.navigateByUrl('/');
     expect(router.url).toBe('/main');
+  });
+
+  it('should preserve exchange sections in direct URLs and enforce prerequisites', async () => {
+    user.set({ email: 'guest@example.com', uid: testUserId });
+    const exchanges = TestBed.inject(ExchangeService);
+    const exchange = await exchanges.create(testUserId, 'Family exchange');
+    const router = TestBed.inject(Router);
+
+    await router.navigateByUrl(`/exchanges/${exchange.id}/rules`);
+    expect(router.url).toBe(`/exchanges/${exchange.id}/families`);
+
+    await exchanges.addFamily(testUserId, exchange.id, 'Parkers', ['Alex']);
+    await exchanges.addFamily(testUserId, exchange.id, 'Moores', ['Taylor']);
+    await exchanges.confirmMembers(testUserId, exchange.id);
+    await router.navigateByUrl(`/exchanges/${exchange.id}/rules`);
+    expect(router.url).toBe(`/exchanges/${exchange.id}/rules`);
+
+    await router.navigateByUrl(`/exchanges/${exchange.id}/drawing`);
+    expect(router.url).toBe(`/exchanges/${exchange.id}/rules`);
+
+    await exchanges.skipRules(testUserId, exchange.id);
+    await router.navigateByUrl(`/exchanges/${exchange.id}/drawing`);
+    expect(router.url).toBe(`/exchanges/${exchange.id}/drawing`);
   });
 });
