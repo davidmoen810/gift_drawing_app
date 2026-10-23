@@ -415,7 +415,7 @@
 
           @if (nameDrawStarted()) {
             <section class="name-draw-progress" aria-label="Name draw progress">
-              @if (!nameDrawFinished() && !nameDrawMessage() && !tryingAgain()) {
+              @if (!nameDrawFinished() && !nameDrawMessage()) {
                 <p class="draw-current" role="status">
                   Drawing a name for <strong>{{ currentGiverName() }}</strong
                   >…
@@ -430,8 +430,6 @@
                 >
                   {{ nameDrawMessage() }}
                 </p>
-              } @else if (tryingAgain()) {
-                <p class="draw-message" role="status" aria-live="polite">Trying again…</p>
               }
               @if (nameDrawAssignments().length) {
                 <div class="drawing-results">

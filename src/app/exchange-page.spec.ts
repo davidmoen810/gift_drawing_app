@@ -79,7 +79,7 @@ describe('ExchangePage drawing order', () => {
     expect(fixture.componentInstance.drawingOrder().map((member) => member.id)).toEqual(finalOrder);
   });
 
-  it('retries invalid draws and never assigns a recipient more than once', async () => {
+  it('precomputes and reveals a complete valid drawing without retrying', async () => {
     const userId = globalThis.crypto.randomUUID();
     const params = new BehaviorSubject(convertToParamMap({}));
     await TestBed.configureTestingModule({
@@ -126,71 +126,48 @@ describe('ExchangePage drawing order', () => {
       members.map((member) => ({ id: member.id, name: member.firstName })),
     );
 
-    const randomValues = [0, 1, 4, 0, 3, 0, 0, 0, 0];
     vi.spyOn(globalThis.crypto, 'getRandomValues').mockImplementation((values) => {
-      (values as Uint32Array)[0] = randomValues.shift() ?? 0;
+      (values as Uint32Array)[0] = 0;
       return values;
     });
 
     fixture.componentInstance.startNameDraw();
-    expect(fixture.componentInstance.nameDrawMessage()).toContain('drew their own name');
-    vi.advanceTimersByTime(2000);
+    expect(fixture.componentInstance.nameDrawAssignments()).toHaveLength(1);
+    expect(fixture.componentInstance.nameDrawMessage()).not.toContain('cannot draw');
+    expect(fixture.componentInstance.nameDrawMessage()).not.toContain('Starting over');
     fixture.detectChanges();
-    expect(fixture.nativeElement.textContent).toContain('Trying again');
-    vi.advanceTimersByTime(800);
-    fixture.detectChanges();
-    expect(fixture.componentInstance.nameDrawMessage()).toContain(
-      'cannot draw the name of their child',
-    );
-
-    vi.advanceTimersByTime(2800);
-    fixture.detectChanges();
-    expect(fixture.componentInstance.nameDrawMessage()).toContain(
-      'Parent is giving a gift to Casey',
-    );
-
-    vi.advanceTimersByTime(800);
-    fixture.detectChanges();
-    expect(fixture.componentInstance.nameDrawMessage()).toContain(
-      'cannot draw the name of their parent',
-    );
-
-    vi.advanceTimersByTime(2800);
-    fixture.detectChanges();
-    expect(fixture.componentInstance.nameDrawMessage()).toContain(
-      'Child is giving a gift to Jordan',
-    );
-
-    vi.runAllTimers();
+    for (let index = 0; index < names.length - 1; index++) {
+      vi.advanceTimersByTime(800);
+      fixture.detectChanges();
+    }
     fixture.detectChanges();
 
     const assignments = fixture.componentInstance.nameDrawAssignments();
     expect(fixture.componentInstance.nameDrawFinished()).toBe(true);
     expect(fixture.nativeElement.textContent).not.toContain('Starting over');
+    expect(fixture.nativeElement.textContent).not.toContain('Trying again');
     expect(fixture.componentInstance.isShufflingNames()).toBe(false);
     expect(fixture.nativeElement.textContent).toContain('Print');
     expect(fixture.nativeElement.querySelector('.print-document h1')?.textContent).toBe(
       'Holiday exchange',
     );
     expect(fixture.nativeElement.querySelector('.print-results')?.textContent).toContain(
-      'Parent drew Casey',
+      'Parent drew',
     );
     expect(assignments).toHaveLength(names.length);
+    expect(new Set(assignments.map((assignment) => assignment.giverId)).size).toBe(names.length);
     expect(new Set(assignments.map((assignment) => assignment.recipientId)).size).toBe(
       names.length,
     );
-    expect(
-      assignments.some(
-        (assignment) =>
-          assignment.giverId === members[0].id && assignment.recipientId === members[1].id,
-      ),
-    ).toBe(false);
-    expect(
-      assignments.some(
-        (assignment) =>
-          assignment.giverId === members[1].id && assignment.recipientId === members[0].id,
-      ),
-    ).toBe(false);
+    expect(assignments.every((assignment) => assignment.giverId !== assignment.recipientId)).toBe(
+      true,
+    );
+    expect(assignments).not.toContainEqual(
+      expect.objectContaining({ giverId: members[0].id, recipientId: members[1].id }),
+    );
+    expect(assignments).not.toContainEqual(
+      expect.objectContaining({ giverId: members[1].id, recipientId: members[0].id }),
+    );
     const printSpy = vi.spyOn(window, 'print').mockImplementation(() => {});
     const printButton = [...fixture.nativeElement.querySelectorAll('button')].find((button) =>
       button.textContent?.includes('Print'),
@@ -210,32 +187,5 @@ describe('ExchangePage drawing order', () => {
     fixture.detectChanges();
     expect(fixture.componentInstance.isShufflingNames()).toBe(false);
     expect(fixture.nativeElement.textContent).toContain('Start name draw');
-
-    const orderBeforeRestart = fixture.componentInstance.drawingOrder();
-    fixture.componentInstance.nameDrawStarted.set(true);
-    fixture.componentInstance.remainingRecipientIds.set([orderBeforeRestart[0].id]);
-    fixture.componentInstance.nameDrawAssignments.set([
-      {
-        giverId: orderBeforeRestart[1].id,
-        giver: orderBeforeRestart[1].name,
-        recipientId: orderBeforeRestart[2].id,
-        recipient: orderBeforeRestart[2].name,
-      },
-    ]);
-    const drawNextRecipient = Reflect.get(
-      fixture.componentInstance,
-      'drawNextRecipient',
-    ) as () => void;
-    drawNextRecipient.call(fixture.componentInstance);
-    fixture.detectChanges();
-
-    expect(fixture.nativeElement.textContent).toContain('Starting over');
-    expect(fixture.componentInstance.nameDrawAssignments()).toHaveLength(0);
-    expect(fixture.componentInstance.drawingOrder()).toEqual(orderBeforeRestart);
-
-    vi.advanceTimersByTime(2000);
-    fixture.detectChanges();
-    expect(fixture.nativeElement.textContent).not.toContain('Starting over');
-    expect(fixture.componentInstance.drawingOrder()).toEqual(orderBeforeRestart);
   });
 });

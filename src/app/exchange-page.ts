@@ -6,10 +6,12 @@ import { AuthService } from './auth.service';
 import { ExchangeService } from './exchange.service';
 import {
   canStartDrawing,
+  DrawingPair,
   ExchangeSection,
   exchangeParticipants,
   Family,
   FamilyMember,
+  generateDrawing,
   GiftExchange,
   isFamilyStepComplete,
   isRulesStepComplete,
@@ -93,12 +95,8 @@ export class ExchangePage {
   readonly nameDrawStarted = signal(false);
   readonly nameDrawFinished = signal(false);
   readonly currentGiverIndex = signal(0);
-  readonly remainingRecipientIds = signal<string[]>([]);
-  readonly nameDrawAssignments = signal<
-    Array<{ giverId: string; giver: string; recipientId: string; recipient: string }>
-  >([]);
+  readonly nameDrawAssignments = signal<DrawingPair[]>([]);
   readonly nameDrawMessage = signal<string | null>(null);
-  readonly tryingAgain = signal(false);
   private readonly shuffleRestart = signal(0);
   readonly relationshipSaving = signal(false);
   readonly relationshipSaved = signal(false);
@@ -119,6 +117,7 @@ export class ExchangePage {
   readonly avoidSiblings = signal(true);
   readonly avoidSpouses = signal(true);
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
+  private plannedAssignments: DrawingPair[] = [];
 
   constructor() {
     this.destroyRef.onDestroy(() => {
@@ -138,10 +137,9 @@ export class ExchangePage {
         this.nameDrawStarted.set(false);
         this.nameDrawFinished.set(false);
         this.currentGiverIndex.set(0);
-        this.remainingRecipientIds.set([]);
+        this.plannedAssignments = [];
         this.nameDrawAssignments.set([]);
         this.nameDrawMessage.set(null);
-        this.tryingAgain.set(false);
         return;
       }
 
@@ -467,11 +465,31 @@ export class ExchangePage {
     if (this.isShufflingNames() || this.nameDrawStarted() || !this.drawingOrder().length) {
       return;
     }
+
+    const drawing = generateDrawing(this.requireExchange());
+    if (!drawing) {
+      this.nameDrawStarted.set(true);
+      this.nameDrawMessage.set(
+        'No complete valid drawing is possible with the current relationships and rules. Adjust them and try again.',
+      );
+      return;
+    }
+    const assignmentsByGiver = new Map(drawing.map((pair) => [pair.giverId, pair]));
+    this.plannedAssignments = this.drawingOrder()
+      .map((member) => assignmentsByGiver.get(member.id))
+      .filter((pair): pair is DrawingPair => pair !== undefined);
+    if (this.plannedAssignments.length !== this.drawingOrder().length) {
+      this.plannedAssignments = [];
+      this.nameDrawStarted.set(true);
+      this.nameDrawMessage.set('Could not match every family member in the drawing order.');
+      return;
+    }
+
     this.nameDrawStarted.set(true);
-    this.remainingRecipientIds.set(this.drawingOrder().map((member) => member.id));
     this.currentGiverIndex.set(0);
+    this.nameDrawFinished.set(false);
     this.nameDrawAssignments.set([]);
-    this.drawNextRecipient();
+    this.revealNextAssignment();
   }
 
   printDrawing(): void {
@@ -486,10 +504,9 @@ export class ExchangePage {
     this.nameDrawStarted.set(false);
     this.nameDrawFinished.set(false);
     this.currentGiverIndex.set(0);
-    this.remainingRecipientIds.set([]);
+    this.plannedAssignments = [];
     this.nameDrawAssignments.set([]);
     this.nameDrawMessage.set(null);
-    this.tryingAgain.set(false);
     this.shuffleRestart.update((restart) => restart + 1);
   }
 
@@ -497,132 +514,27 @@ export class ExchangePage {
     return this.drawingOrder()[this.currentGiverIndex()]?.name ?? '';
   }
 
-  private drawNextRecipient(): void {
-    const giver = this.drawingOrder()[this.currentGiverIndex()];
-    if (!giver) {
+  private revealNextAssignment(): void {
+    const assignment = this.plannedAssignments[this.currentGiverIndex()];
+    if (!assignment) {
       this.nameDrawFinished.set(true);
       this.nameDrawMessage.set('Everyone has drawn a name.');
       return;
     }
 
-    const remaining = this.remainingRecipientIds();
-    if (remaining.length === 0) {
-      this.restartNameDrawAfterDeadEnd();
-      return;
-    }
-    if (!remaining.some((id) => this.recipientRejection(giver.id, id) === null)) {
-      this.restartNameDrawAfterDeadEnd();
-      return;
-    }
-
-    const recipientId = remaining[randomIndex(remaining.length)];
-    const recipient = this.drawingRoster().find((member) => member.id === recipientId);
-    if (!recipient) {
-      this.nameDrawMessage.set('A family member could not be found in the drawing list.');
-      return;
-    }
-
-    const rejection = this.recipientRejection(giver.id, recipient.id);
-    if (rejection) {
-      this.nameDrawMessage.set(`${giver.name} ${rejection} We will try another name.`);
-      this.tryingAgain.set(false);
-      this.retryTimer = setTimeout(() => {
-        this.retryTimer = null;
-        this.nameDrawMessage.set(null);
-        this.tryingAgain.set(true);
-        this.retryTimer = setTimeout(() => {
-          this.retryTimer = null;
-          this.tryingAgain.set(false);
-          this.drawNextRecipient();
-        }, 800);
-      }, 2000);
-      return;
-    }
-
-    this.nameDrawAssignments.update((assignments) => [
-      ...assignments,
-      {
-        giverId: giver.id,
-        giver: giver.name,
-        recipientId: recipient.id,
-        recipient: recipient.name,
-      },
-    ]);
-    this.remainingRecipientIds.set(remaining.filter((id) => id !== recipient.id));
-    this.tryingAgain.set(false);
+    this.nameDrawAssignments.update((assignments) => [...assignments, assignment]);
     if (this.nameDrawAssignments().length === this.drawingOrder().length) {
       this.nameDrawFinished.set(true);
       this.nameDrawMessage.set('Everyone has drawn a name.');
       return;
     }
-    this.nameDrawMessage.set(`${giver.name} is giving a gift to ${recipient.name}.`);
+    this.nameDrawMessage.set(`${assignment.giver} is giving a gift to ${assignment.recipient}.`);
     this.retryTimer = setTimeout(() => {
       this.retryTimer = null;
       this.nameDrawMessage.set(null);
       this.currentGiverIndex.update((index) => index + 1);
-      this.drawNextRecipient();
+      this.revealNextAssignment();
     }, 800);
-  }
-
-  private restartNameDrawAfterDeadEnd(): void {
-    if (this.nameDrawAssignments().length === this.drawingOrder().length) {
-      this.nameDrawFinished.set(true);
-      this.nameDrawMessage.set('Everyone has drawn a name.');
-      return;
-    }
-    if (this.retryTimer) {
-      clearTimeout(this.retryTimer);
-    }
-    this.nameDrawAssignments.set([]);
-    this.nameDrawFinished.set(false);
-    this.currentGiverIndex.set(0);
-    this.remainingRecipientIds.set([]);
-    this.tryingAgain.set(false);
-    this.nameDrawMessage.set('Starting over');
-    this.retryTimer = setTimeout(() => {
-      this.retryTimer = null;
-      this.nameDrawMessage.set(null);
-      this.remainingRecipientIds.set(this.drawingOrder().map((member) => member.id));
-      this.drawNextRecipient();
-    }, 2000);
-  }
-
-  private recipientRejection(giverId: string, recipientId: string): string | null {
-    const members = this.exchange()?.families.flatMap((family) => family.members) ?? [];
-    const giver = members.find((member) => member.id === giverId);
-    const recipient = members.find((member) => member.id === recipientId);
-    if (!giver || !recipient) {
-      return 'could not be matched because a name is unavailable.';
-    }
-    if (giverId === recipientId) {
-      return 'drew their own name.';
-    }
-    if (
-      this.exchange()?.avoidParentChild &&
-      giver.relationships.childrenIds.includes(recipientId)
-    ) {
-      return 'cannot draw the name of their child.';
-    }
-    if (
-      this.exchange()?.avoidChildParent &&
-      recipient.relationships.childrenIds.includes(giverId)
-    ) {
-      return 'cannot draw the name of their parent.';
-    }
-    if (
-      this.exchange()?.avoidSiblings &&
-      (giver.relationships.siblingIds.includes(recipientId) ||
-        recipient.relationships.siblingIds.includes(giverId))
-    ) {
-      return 'cannot draw the name of their sibling.';
-    }
-    if (
-      this.exchange()?.avoidSpouses &&
-      (giver.relationships.spouseId === recipientId || recipient.relationships.spouseId === giverId)
-    ) {
-      return 'cannot draw the name of their spouse.';
-    }
-    return null;
   }
 
   private requireExchange(): GiftExchange {
@@ -642,20 +554,8 @@ export class ExchangePage {
 function shuffleMembers<T>(members: T[]): T[] {
   const shuffled = members.slice();
   for (let index = shuffled.length - 1; index > 0; index--) {
-    const random = new Uint32Array(1);
-    globalThis.crypto.getRandomValues(random);
-    const swapIndex = random[0] % (index + 1);
+    const swapIndex = randomIndex(index + 1);
     [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
-  }
-
-  function randomIndex(maxExclusive: number): number {
-    const values = new Uint32Array(1);
-    const maxValue = 0x100000000;
-    const limit = maxValue - (maxValue % maxExclusive);
-    do {
-      globalThis.crypto.getRandomValues(values);
-    } while (values[0] >= limit);
-    return values[0] % maxExclusive;
   }
   return shuffled;
 }

@@ -74,101 +74,83 @@ export function canStartDrawing(exchange: GiftExchange): boolean {
     return false;
   }
 
-  const participants = exchangeParticipants(exchange);
-  const matchedGivers = new Map<string, string>();
-
-  function canMatch(giverId: string, visitedRecipients: Set<string>): boolean {
-    const giverParticipant = participants.find((participant) => participant.id === giverId);
-    if (!giverParticipant) {
-      return false;
-    }
-    for (const recipient of participants) {
-      if (
-        recipient.id === giverId ||
-        visitedRecipients.has(recipient.id) ||
-        (exchange.avoidParentChild && giverParticipant.childrenIds.includes(recipient.id)) ||
-        (exchange.avoidChildParent && recipient.childrenIds.includes(giverId)) ||
-        (exchange.avoidSiblings &&
-          (giverParticipant.siblingIds.includes(recipient.id) ||
-            recipient.siblingIds.includes(giverId))) ||
-        (exchange.avoidSpouses &&
-          (giverParticipant.spouseId === recipient.id || recipient.spouseId === giverId))
-      ) {
-        continue;
-      }
-      visitedRecipients.add(recipient.id);
-      const previousGiver = matchedGivers.get(recipient.id);
-      if (!previousGiver || canMatch(previousGiver, visitedRecipients)) {
-        matchedGivers.set(recipient.id, giverId);
-        return true;
-      }
-    }
-    return false;
-  }
-
-  return participants.every((participant) => canMatch(participant.id, new Set()));
+  return findDrawingAssignment(exchange, false) !== null;
 }
 
 export function generateDrawing(exchange: GiftExchange): DrawingPair[] | null {
-  if (!canStartDrawing(exchange)) {
+  if (!isFamilyStepComplete(exchange) || !isRulesStepComplete(exchange)) {
     return null;
   }
 
+  return findDrawingAssignment(exchange, true);
+}
+
+function findDrawingAssignment(exchange: GiftExchange, randomize: boolean): DrawingPair[] | null {
   const participants = exchangeParticipants(exchange);
-  const recipients = new Set<number>();
-  const pairs: DrawingPair[] = [];
-  let attempts = 0;
+  if (participants.length < 2) {
+    return null;
+  }
 
-  function assign(giverIndex: number): boolean {
-    if (giverIndex === participants.length) {
-      return true;
-    }
-    if (++attempts > 50000) {
-      return false;
-    }
+  const matchedGiverByRecipient = new Array<number>(participants.length).fill(-1);
+  const giverOrder = participants.map((_, index) => index);
+  if (randomize) {
+    shuffle(giverOrder);
+  }
 
+  function canAssign(giverIndex: number, visitedRecipients: Set<number>): boolean {
+    const giver = participants[giverIndex];
     const candidates = participants
       .map((_, index) => index)
-      .filter(
-        (index) =>
-          index !== giverIndex &&
-          !recipients.has(index) &&
-          (!exchange.avoidParentChild ||
-            !participants[giverIndex].childrenIds.includes(participants[index].id)) &&
-          (!exchange.avoidChildParent ||
-            !participants[index].childrenIds.includes(participants[giverIndex].id)) &&
+      .filter((recipientIndex) => {
+        const recipient = participants[recipientIndex];
+        return (
+          recipientIndex !== giverIndex &&
+          !visitedRecipients.has(recipientIndex) &&
+          (!exchange.avoidParentChild || !giver.childrenIds.includes(recipient.id)) &&
+          (!exchange.avoidChildParent || !recipient.childrenIds.includes(giver.id)) &&
           (!exchange.avoidSiblings ||
-            (!participants[giverIndex].siblingIds.includes(participants[index].id) &&
-              !participants[index].siblingIds.includes(participants[giverIndex].id))) &&
+            (!giver.siblingIds.includes(recipient.id) &&
+              !recipient.siblingIds.includes(giver.id))) &&
           (!exchange.avoidSpouses ||
-            (participants[giverIndex].spouseId !== participants[index].id &&
-              participants[index].spouseId !== participants[giverIndex].id)),
-      );
-
-    for (let index = candidates.length - 1; index > 0; index--) {
-      const swapIndex = randomIndex(index + 1);
-      [candidates[index], candidates[swapIndex]] = [candidates[swapIndex], candidates[index]];
+            (giver.spouseId !== recipient.id && recipient.spouseId !== giver.id))
+        );
+      });
+    if (randomize) {
+      shuffle(candidates);
     }
 
     for (const recipientIndex of candidates) {
-      recipients.add(recipientIndex);
-      pairs.push({
-        giverId: participants[giverIndex].id,
-        giver: participants[giverIndex].name,
-        recipientId: participants[recipientIndex].id,
-        recipient: participants[recipientIndex].name,
-      });
-      if (assign(giverIndex + 1)) {
+      visitedRecipients.add(recipientIndex);
+      const previousGiver = matchedGiverByRecipient[recipientIndex];
+      if (previousGiver === -1 || canAssign(previousGiver, visitedRecipients)) {
+        matchedGiverByRecipient[recipientIndex] = giverIndex;
         return true;
       }
-      pairs.pop();
-      recipients.delete(recipientIndex);
     }
-
     return false;
   }
 
-  return assign(0) ? pairs : null;
+  if (!giverOrder.every((giverIndex) => canAssign(giverIndex, new Set()))) {
+    return null;
+  }
+
+  return participants.map((giver, giverIndex) => {
+    const recipientIndex = matchedGiverByRecipient.indexOf(giverIndex);
+    const recipient = participants[recipientIndex];
+    return {
+      giverId: giver.id,
+      giver: giver.name,
+      recipientId: recipient.id,
+      recipient: recipient.name,
+    };
+  });
+}
+
+function shuffle<T>(items: T[]): void {
+  for (let index = items.length - 1; index > 0; index--) {
+    const swapIndex = randomIndex(index + 1);
+    [items[index], items[swapIndex]] = [items[swapIndex], items[index]];
+  }
 }
 
 function randomIndex(maxExclusive: number): number {
