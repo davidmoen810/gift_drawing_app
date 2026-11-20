@@ -64,6 +64,16 @@ jobs:
       - name: Validate Terraform
         run: terraform -chdir=terraform validate
 
+      - name: Recover existing tainted website bucket
+        shell: bash
+        run: |
+          if terraform -chdir=terraform state show aws_s3_bucket.website 2>/dev/null | grep -q '(tainted)'; then
+            aws s3api head-bucket --bucket "$S3_BUCKET_NAME"
+            terraform -chdir=terraform untaint aws_s3_bucket.website
+          else
+            echo "Website bucket is not tainted."
+          fi
+
       - name: Import existing website bucket when needed
         shell: bash
         run: |
