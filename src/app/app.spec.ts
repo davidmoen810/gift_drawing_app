@@ -50,7 +50,7 @@ describe('LoginPage', () => {
     await fixture.whenStable();
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.querySelector('h1')?.textContent).toContain(
-      'Make gift giving feel effortless.',
+      "Cue the confetti: it's gift-drawing time!",
     );
     expect(compiled.textContent).toContain('Your next celebration starts here.');
     expect(compiled.querySelector('input[type="email"]')).toBeTruthy();
