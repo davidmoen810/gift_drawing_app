@@ -1,0 +1,101 @@
+name: Test and deploy
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: gift-drawing-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      S3_BUCKET_NAME: ${{ vars.S3_BUCKET_NAME }}
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test -- --watch=false
+
+      - name: Build Angular app
+        run: npm run build
+
+      - name: Check Terraform formatting
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.10.5
+
+      - name: Check Terraform format
+        run: terraform -chdir=terraform fmt -check -recursive
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Initialize Terraform
+        run: |
+          terraform -chdir=terraform init \
+            -backend-config="bucket=${TF_STATE_BUCKET}" \
+            -backend-config="key=gift-drawing/website.tfstate" \
+            -backend-config="region=${AWS_REGION}" \
+            -backend-config="use_lockfile=true"
+
+      - name: Validate Terraform
+        run: terraform -chdir=terraform validate
+
+      - name: Import existing website bucket when needed
+        shell: bash
+        run: |
+          if terraform -chdir=terraform state list | grep -Fxq 'aws_s3_bucket.website'; then
+            echo "Website bucket is already managed by Terraform."
+          else
+            set +e
+            head_bucket_result=$(aws s3api head-bucket --bucket "$S3_BUCKET_NAME" 2>&1)
+            head_bucket_status=$?
+            set -e
+
+            if [ "$head_bucket_status" -eq 0 ]; then
+              terraform -chdir=terraform import \
+                -var="aws_region=${AWS_REGION}" \
+                -var="bucket_name=${S3_BUCKET_NAME}" \
+                aws_s3_bucket.website "$S3_BUCKET_NAME"
+            elif printf '%s' "$head_bucket_result" | grep -q '(404)'; then
+              echo "Website bucket does not exist; Terraform will create it."
+            else
+              printf '%s\n' "$head_bucket_result" >&2
+              exit "$head_bucket_status"
+            fi
+          fi
+
+      - name: Apply Terraform
+        env:
+          TF_VAR_aws_region: ${{ vars.AWS_REGION }}
+          TF_VAR_bucket_name: ${{ vars.S3_BUCKET_NAME }}
+        run: terraform -chdir=terraform apply -auto-approve
+
+      - name: Publish website
+        run: aws s3 sync dist/gift_drawing_app/browser/ "s3://${S3_BUCKET_NAME}/" --delete
+
+      - name: Show website URL
+        run: terraform -chdir=terraform output -raw website_url
