@@ -67,7 +67,20 @@ jobs:
       - name: Recover existing tainted website bucket
         shell: bash
         run: |
-          if terraform -chdir=terraform state show -no-color aws_s3_bucket.website 2>/dev/null | grep -q 'tainted'; then
+          state_json=$(terraform -chdir=terraform state pull)
+          is_bucket_tainted=false
+          if [ -n "$state_json" ]; then
+            is_bucket_tainted=$(printf '%s' "$state_json" | jq -r '
+              [
+                .resources[]?
+                | select(.type == "aws_s3_bucket" and .name == "website")
+                | .instances[]?
+                | select(.status == "tainted")
+              ] | length > 0
+            ')
+          fi
+
+          if [ "$is_bucket_tainted" = "true" ]; then
             aws s3api head-bucket --bucket "$S3_BUCKET_NAME"
             terraform -chdir=terraform untaint aws_s3_bucket.website
           else
