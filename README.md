@@ -39,3 +39,20 @@ npm run build
 ```bash
 ng test
 ```
+
+## GitHub Actions deployment
+
+`.github/workflows/deploy.yml` runs when a commit is pushed to `main` (including merge commits). It installs dependencies, runs the frontend tests and production build, applies the Terraform website configuration, and syncs `dist/gift_drawing_app/browser/` to S3.
+
+The workflow uses GitHub OIDC to assume an AWS IAM role; do not add long-lived AWS access keys to GitHub. Configure these repository **Actions variables**:
+
+- `AWS_REGION`: region for the website and Terraform state buckets.
+- `AWS_ROLE_ARN`: IAM role ARN trusted for this repository's `main` branch through GitHub OIDC.
+- `S3_BUCKET_NAME`: globally unique name for the public website bucket.
+- `TF_STATE_BUCKET`: name of a separate, pre-created private S3 bucket for Terraform state. Enable versioning on it; the workflow uses S3 lock files.
+
+Create the Terraform state bucket before the first deployment. Configure the AWS role's OIDC trust policy to allow `repo:davidmoen810/gift_drawing_app:ref:refs/heads/main`, and grant it permission to manage the website bucket, read and publish its objects, and read/write/lock the Terraform state in `TF_STATE_BUCKET`. The account must allow public S3 bucket policies for the website bucket.
+
+The deployment role needs `s3:ListBucket`, `s3:GetBucketLocation`, `s3:CreateBucket`, `s3:GetBucketWebsite`, `s3:PutBucketWebsite`, `s3:GetBucketPublicAccessBlock`, `s3:PutBucketPublicAccessBlock`, `s3:GetBucketOwnershipControls`, `s3:PutBucketOwnershipControls`, `s3:GetBucketPolicy`, `s3:PutBucketPolicy`, `s3:PutObject`, and `s3:DeleteObject` for the website bucket. For the state bucket, it needs `s3:ListBucket` and `s3:GetBucketLocation` on the bucket, plus `s3:GetObject`, `s3:PutObject`, and `s3:DeleteObject` on its objects (including the `.tflock` lock file).
+
+Terraform enables S3 website hosting and public object reads. The URL uses the S3 website endpoint over **HTTP only**. Add the website hostname to Firebase **Authentication → Settings → Authorized domains**. S3 static website hosting does not provide HTTPS; use CloudFront in front of the bucket if HTTPS or a custom domain is needed. The workflow synchronizes with `--delete`, so use a dedicated website bucket.
